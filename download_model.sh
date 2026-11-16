@@ -3,6 +3,7 @@
 #
 #   ./download_model.sh                      Qwen/Qwen3-0.6B (about 1.5 GB)
 #   ./download_model.sh Qwen/Qwen3-1.7B      a larger dense Qwen3
+#   (models stored as several weight files, such as Qwen3-8B, need ./run_8b.sh)
 #   ./download_model.sh Qwen/Qwen3-0.6B dir  into another directory
 #
 # Only three files are needed by the engine: config.json, tokenizer.json and
@@ -12,7 +13,7 @@ set -e
 
 REPO="${1:-Qwen/Qwen3-0.6B}"
 DIR="${2:-model}"
-BASE="https://huggingface.co/$REPO/resolve/main"
+BASE="${HF_ENDPOINT:-https://huggingface.co}/$REPO/resolve/main"
 
 # Catch a mistyped repo name before downloading anything (it must look like owner/name).
 case "$REPO" in
@@ -25,9 +26,16 @@ esac
 
 mkdir -p "$DIR"
 for f in config.json tokenizer.json tokenizer_config.json model.safetensors; do
+    if [ -f "$DIR/$f" ]; then
+        echo "== $f (already downloaded)"
+        continue
+    fi
     echo "== $f"
-    # -L follows redirects, -C - resumes a partial download, --fail stops on HTTP errors
-    curl -L --fail --progress-bar -C - -o "$DIR/$f" "$BASE/$f"
+    # Download to NAME.part and rename when complete, so an interrupted run
+    # resumes and a finished file is skipped on the next run.
+    # -L follows redirects, -C - resumes a partial file, --fail stops on HTTP errors
+    curl -L --fail --progress-bar -C - -o "$DIR/$f.part" "$BASE/$f"
+    mv "$DIR/$f.part" "$DIR/$f"
 done
 
 # A wrong URL can still return a web page; make sure config.json really is JSON.

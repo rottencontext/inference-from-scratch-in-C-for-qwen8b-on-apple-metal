@@ -20,6 +20,28 @@ dense Qwen3 models load too. The MoE variants (the `-A3B` / `-A22B` models) do n
 ./qwen3 --no-think -s "Answer in one line."  # no reasoning block, with a system prompt
 ```
 
+To run the 8B model instead, one script downloads it (16.4 GB, into `model-8b/`) and
+starts the engine on it. It passes any option through to `./qwen3`:
+
+```sh
+./run_8b.sh
+./run_8b.sh -p "Why is the sky blue?"
+```
+
+Qwen3-8B needs about 34 GB of memory on this engine and is slow, because the weights
+are held as float32 and every token reads all 32.8 GB of them. The script refuses to
+start on a machine with less than 40 GB.
+
+To measure a change, run the benchmark before and after it. It uses Qwen3-8B by default,
+runs a fixed prompt three times, and records the median speed, the peak memory, and
+whether the output still matches the saved baseline:
+
+```sh
+./bench.sh model-8b "what changed"           # adds a row to docs/_data/results.csv
+./bench.sh --sweep                           # speed at 1, 2, 4, 6, 12 and 18 threads
+./new_report.sh "Title of the report"        # starts docs/_posts/DATE-title.md
+```
+
 `build.sh` is a plain shell script: one compiler command, with `CC=` and `CFLAGS=` as
 overrides. The equivalent by hand is `cc -O3 -o qwen3 qwen3.c -lm -lpthread`.
 
@@ -188,6 +210,10 @@ qwen3.c             the engine
 unicode_tables.h    generated Unicode data (letter/number ranges, NFC tables)
 build.sh            ./build.sh, ./build.sh test, ./build.sh debug
 download_model.sh   fetches the model files with curl
+run_8b.sh           downloads Qwen3-8B (five weight files) and runs it
+bench.sh            measures speed, memory and correctness; adds a row to docs/_data/results.csv
+new_report.sh       starts a blog report from the last two benchmark rows
+docs/               the progress blog (GitHub Pages builds it with Jekyll)
 tests/              tiny model, reference logits, tokenizer vectors, cmp_f32.c
 tools/              the verification scripts described above
 ```

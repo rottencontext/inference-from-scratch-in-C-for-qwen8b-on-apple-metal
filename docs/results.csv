@@ -1,0 +1,6 @@
+---
+layout: null
+---
+date,commit,model,threads,runs,new_tokens,load_s,prompt_tok_s,ttft_s,gen_tok_s,peak_mem_gb,swap_mb,logits_diff,same_text,note
+{% for r in site.data.results %}{{ r.date }},{{ r.commit }},{{ r.model }},{{ r.threads }},{{ r.runs }},{{ r.new_tokens }},{{ r.load_s }},{{ r.prompt_tok_s }},{{ r.ttft_s }},{{ r.gen_tok_s }},{{ r.peak_mem_gb }},{{ r.swap_mb }},{{ r.logits_diff }},{{ r.same_text }},{{ r.note }}
+{% endfor %}

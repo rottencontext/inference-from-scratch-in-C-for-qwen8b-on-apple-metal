@@ -1,0 +1,8 @@
+# GitHub Pages builds this folder with Jekyll; there is nothing to install.
+title: "Qwen3 in C: getting faster"
+description: "One C file running Qwen3-8B on a Mac, measured after every change."
+# The site lives at https://<user>.github.io/<repo>/. Change this if the
+# repository is renamed, or set it to "" for a custom domain.
+baseurl: "/inference-from-scratch-in-C-for-qwen8b-on-apple-metal"
+markdown: kramdown
+permalink: /reports/:year-:month-:day-:title/

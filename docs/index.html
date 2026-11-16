@@ -1,0 +1,74 @@
+---
+layout: default
+---
+{% assign rows = site.data.results | where: "model", "model-8b" %}
+<h1>Qwen3-8B in one C file, measured after every change</h1>
+<p class="lede">The engine is a single C file with no libraries. Each report below is one change,
+with the same benchmark run before and after: same prompt, same 64 tokens, the top token picked
+every time, median of three runs.</p>
+
+{% if rows.size > 0 %}
+{% assign first = rows | first %}
+{% assign last = rows | last %}
+{% assign base = first.gen_tok_s | plus: 0 %}
+{% assign max = 0.0 %}
+{% for r in rows %}{% assign v = r.gen_tok_s | plus: 0 %}{% if v > max %}{% assign max = v %}{% endif %}{% endfor %}
+
+<div class="tiles">
+  <div class="tile"><span class="label">Now</span><span class="num">{{ last.gen_tok_s }}</span><span class="unit">tokens/s</span></div>
+  <div class="tile"><span class="label">Started at</span><span class="num">{{ first.gen_tok_s }}</span><span class="unit">tokens/s</span></div>
+  <div class="tile"><span class="label">Speed-up</span><span class="num">{% if base > 0 %}{{ last.gen_tok_s | times: 1.0 | divided_by: base | round: 2 }}×{% else %}n/a{% endif %}</span><span class="unit">since the start</span></div>
+  <div class="tile"><span class="label">Peak memory</span><span class="num">{{ last.peak_mem_gb }}</span><span class="unit">GB</span></div>
+</div>
+
+<h2>Generation speed after each change</h2>
+<ol class="bars">
+{% for r in rows %}
+  <li>
+    <span class="what">{{ r.note | default: r.commit }}</span>
+    <span class="track"><span class="bar" style="width: {% if max > 0 %}{{ r.gen_tok_s | times: 100.0 | divided_by: max | round: 1 }}{% else %}0{% endif %}%"></span></span>
+    <span class="val">{{ r.gen_tok_s }}</span>
+  </li>
+{% endfor %}
+</ol>
+<p class="note">Tokens per second on Qwen3-8B. Longer is faster.</p>
+{% endif %}
+
+<h2>Reports</h2>
+{% if site.posts.size > 0 %}
+<ul class="posts">
+{% for post in site.posts %}
+  <li>
+    <span class="date">{{ post.date | date: "%-d %b %Y" }}</span>
+    <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+    {% if post.summary %}<span class="summary">{{ post.summary }}</span>{% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="note">No reports yet.</p>
+{% endif %}
+
+{% if rows.size > 0 %}
+<h2>Every measurement</h2>
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th>Date</th><th>Commit</th><th>Change</th><th class="n">Generate tok/s</th><th class="n">Prompt tok/s</th>
+    <th class="n">Load s</th><th class="n">Peak GB</th><th class="n">Swap MB</th><th class="n">Logits diff</th><th>Same reply</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows reversed %}
+  <tr>
+    <td>{{ r.date }}</td><td><code>{{ r.commit }}</code></td><td>{{ r.note }}</td>
+    <td class="n strong">{{ r.gen_tok_s }}</td><td class="n">{{ r.prompt_tok_s }}</td><td class="n">{{ r.load_s }}</td>
+    <td class="n">{{ r.peak_mem_gb }}</td><td class="n">{{ r.swap_mb }}</td><td class="n">{{ r.logits_diff }}</td><td>{{ r.same_text }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="note">"Logits diff" is the largest difference from the original engine's output scores over 13 fixed
+tokens; "same reply" is whether the 64 generated tokens match the original engine's exactly.
+Threads: {{ last.threads }}. Raw data: <a href="{{ '/results.csv' | relative_url }}">results.csv</a>.</p>
+{% endif %}

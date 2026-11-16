@@ -1,0 +1,2 @@
+date,commit,model,threads,runs,new_tokens,load_s,prompt_tok_s,ttft_s,gen_tok_s,peak_mem_gb,swap_mb,logits_diff,same_text,note
+2026-11-16,f3947aa,model-8b,6,3,64,24.6,2.0,11.00,7.3,30.58,3916,baseline,baseline,baseline: original engine
