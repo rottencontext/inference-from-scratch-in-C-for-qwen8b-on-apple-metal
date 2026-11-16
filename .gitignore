@@ -1,0 +1,12 @@
+# build outputs
+/qwen3
+/qwen3-debug
+/tests/cmp_f32
+/tests/out.bin
+/tests/out.txt
+*.dSYM/
+
+# downloaded weights (see download_model.sh)
+/model/
+
+.DS_Store
