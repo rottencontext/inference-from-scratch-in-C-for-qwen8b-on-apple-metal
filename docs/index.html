@@ -6,6 +6,7 @@ layout: default
 <p class="lede">The engine is a single C file with no libraries. Each report below is one change,
 with the same benchmark run before and after: same prompt, same 64 tokens, the top token picked
 every time, median of three runs.</p>
+<p><a href="{{ '/walkthrough/' | relative_url }}">How the engine uses the Mac</a>: a step-through of which lines of C use which parts of the M5 Pro, while loading the model and while generating one token.</p>
 
 {% if rows.size > 0 %}
 {% assign first = rows | first %}

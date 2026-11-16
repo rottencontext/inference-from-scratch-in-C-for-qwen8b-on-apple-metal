@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>qwen3.c on the M5 Pro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one column. Step text on top, the C lines it is about, then the machine those lines touch. */
+:root {
+  --bg: #e9ede9; --panel: #f6f8f5; --box: #ffffff; --ink: #1d2a2c; --muted: #5d6b6b;
+  --line: #c8d0cb; --die: #dde3de; --hot: #1f6b58; --hot-fill: #d6ebe2; --flow: #b07a1c;
+  --flow-fill: #f3e6c8; --code-hot: #e3efe6;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #141a1b; --panel: #1b2324; --box: #222c2d; --ink: #e3ebe7; --muted: #95a39f;
+    --line: #34413f; --die: #19201f; --hot: #6fcfae; --hot-fill: #1e3b33; --flow: #e0ad52;
+    --flow-fill: #3c3220; --code-hot: #22352f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141a1b; --panel: #1b2324; --box: #222c2d; --ink: #e3ebe7; --muted: #95a39f;
+  --line: #34413f; --die: #19201f; --hot: #6fcfae; --hot-fill: #1e3b33; --flow: #e0ad52;
+  --flow-fill: #3c3220; --code-hot: #22352f;
+}
+*, *::before, *::after { box-sizing: inherit; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+main {
+  max-width: 800px; margin: 0 auto; padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+.hint { color: var(--muted); margin: 0 0 16px; font-size: 0.9rem; max-width: 68ch; }
+.mono { font-family: var(--mono); font-size: 0.92em; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; }
+.tabs a {
+  padding: 8px 14px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: 0.92rem;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.tabs a[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--hot); }
+
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; min-height: 150px; }
+.step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.step-title { font-weight: 600; margin: 0; font-size: 1rem; }
+.step-text { margin: 8px 0 0; max-width: 72ch; }
+.progress { display: flex; gap: 4px; margin-top: 12px; }
+.progress span { height: 3px; flex: 1; border-radius: 2px; background: var(--line); transition: background .2s; }
+.progress span.on { background: var(--hot); }
+.controls { display: flex; gap: 8px; }
+.controls button {
+  font: inherit; font-size: 0.875rem; font-weight: 500; padding: 6px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--box); color: var(--ink); cursor: pointer;
+}
+.controls button.primary { background: var(--hot); border-color: var(--hot); color: var(--bg); }
+.controls button:disabled { opacity: .4; cursor: default; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--flow); outline-offset: 2px; }
+
+/* the C lines */
+.code { background: var(--box); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.code-head { display: flex; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--line); font-size: 0.78rem; color: var(--muted); }
+.code-head b { color: var(--ink); font-weight: 600; font-family: var(--mono); }
+.code-body { overflow-x: auto; padding: 8px 0; min-height: 168px; }
+.code-body div { display: flex; font-family: var(--mono); font-size: 0.78rem; line-height: 1.55; white-space: pre; padding-right: 14px; width: max-content; min-width: 100%; }
+.code-body div.hl { background: var(--code-hot); box-shadow: inset 3px 0 0 var(--hot); }
+.code-body .n { flex: none; width: 52px; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
+.code-body .gap { color: var(--muted); }
+
+/* the machine */
+.unit {
+  display: block; width: 100%; text-align: center; font: inherit; color: var(--ink);
+  background: var(--box); border: 1.5px solid var(--line); border-radius: 6px;
+  padding: 9px 6px; cursor: pointer; transition: background .2s, border-color .2s; min-width: 0;
+}
+.unit b { display: block; font-weight: 600; font-size: 0.875rem; }
+.unit small { display: block; color: var(--muted); font-size: 0.75rem; line-height: 1.3; margin-top: 2px; }
+.unit:hover { border-color: var(--muted); }
+.unit.hot { background: var(--hot-fill); border-color: var(--hot); }
+.unit.idle { border-style: dashed; background: transparent; }
+.unit.idle b { color: var(--muted); font-weight: 500; }
+.unit.idle.hot { background: var(--hot-fill); border-style: solid; }
+.label { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin: 0 0 8px 2px; }
+.link { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 6px 0; transition: color .2s; }
+.link.flow { color: var(--flow); font-weight: 600; }
+
+.pkg { background: var(--die); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.dies { display: grid; grid-template-columns: 1.7fr 1fr; gap: 8px; align-items: stretch; }
+.die { border: 1.5px solid var(--line); border-radius: 8px; padding: 8px; background: var(--panel); display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: border-color .2s; }
+.die.followed { border-color: var(--hot); }
+.die .label { margin-bottom: 2px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.threads { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 7px auto 5px; max-width: 330px; }
+.threads i {
+  display: block; font-style: normal; font-family: var(--mono); font-size: 0.7rem; padding: 6px 0; border-radius: 3px;
+  background: var(--die); color: var(--muted); border: 1px solid var(--line); transition: background .2s, color .2s, border-color .2s;
+}
+.threads i.run { background: var(--hot); color: var(--bg); border-color: var(--hot); }
+.threads i.spin { border-color: var(--flow); color: var(--flow); background: var(--flow-fill); }
+.pips { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin: 6px 0 4px; }
+.pips i { display: block; width: 8px; height: 8px; border-radius: 2px; background: var(--line); }
+.key { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 0.72rem; color: var(--muted); }
+.key span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--line); background: var(--die); }
+.key .k-run::before { background: var(--hot); border-color: var(--hot); }
+.key .k-spin::before { background: var(--flow-fill); border-color: var(--flow); }
+
+/* memory drawn to scale: 48 GB across the full width */
+.membar { display: flex; height: 30px; margin: 8px 0 4px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--die); }
+.seg { display: flex; flex: none; height: 100%; border-right: 1px solid var(--line); transition: background .2s; }
+.seg.on { background: var(--line); }
+.seg.hot { background: var(--hot); }
+.seg.flow { background: var(--flow); }
+.seg.ghost { background: repeating-linear-gradient(135deg, var(--line) 0 3px, transparent 3px 7px); }
+.seg.layers { gap: 1px; background: transparent; padding: 0; }
+.seg.layers i { flex: 1; transition: background .2s; }
+.seg.layers.on i { background: var(--line); }
+.seg.layers i.hot { background: var(--hot); }
+.memlabels { display: flex; font-size: 0.68rem; color: var(--muted); line-height: 1.25; }
+.memlabels span { flex: none; overflow: hidden; text-align: center; padding: 0 2px; }
+.memlabels span.lit { color: var(--ink); font-weight: 600; }
+.memnote { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 16px 0 14px; }
+.card h2 { font-size: 0.92rem; font-weight: 600; margin: 0 0 8px; }
+.sub { color: var(--muted); font-size: 0.82rem; max-width: 72ch; }
+.card .sub { margin: 10px 0 0; }
+.scroll { display: block; overflow-x: auto; padding: 2px 0; }
+.cmp { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 0.84rem; }
+.cmp th, .cmp td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.cmp tr:last-child th, .cmp tr:last-child td { border-bottom: 0; }
+.cmp thead th { font-weight: 600; font-size: 0.78rem; color: var(--muted); }
+.cmp tbody th { font-weight: 500; font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; }
+.cmp td.r, .cmp th.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* bars on the limits tab */
+.bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
+.bars .track { height: 16px; background: var(--die); border-radius: 3px; position: relative; min-width: 60px; }
+.bars .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--line); }
+.bars .fill.hot { background: var(--hot); }
+.bars .fill.flow { background: var(--flow); }
+.bars .v { font-family: var(--mono); font-size: 0.8rem; text-align: right; font-variant-numeric: tabular-nums; }
+.split { display: flex; height: 26px; border-radius: 4px; overflow: hidden; margin: 6px 0 6px; }
+.split span { display: flex; align-items: center; justify-content: center; font-size: 0.72rem; color: var(--bg); font-weight: 600; white-space: nowrap; overflow: hidden; }
+.split .a { background: var(--hot); } .split .b { background: var(--flow); } .split .c { background: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.78rem; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.legend .a::before { background: var(--hot); } .legend .b::before { background: var(--flow); } .legend .c::before { background: var(--muted); }
+.sum { font-family: var(--mono); font-size: 0.86rem; background: var(--box); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 0; overflow-x: auto; white-space: pre; line-height: 1.6; }
+
+@media (max-width: 600px) {
+  .dies { grid-template-columns: 1fr; }
+  .memlabels { font-size: 0.6rem; }
+  .bars { grid-template-columns: 1fr max-content; }
+  .bars .track { grid-column: 1 / -1; order: 3; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<main>
+  <p class="hint" style="margin:0 0 10px"><a href="../" style="color:var(--hot)">← Back to the progress blog</a></p>
+  <nav class="tabs" role="tablist">
+    <a href="#loading" role="tab" id="tab-loading">Loading the model</a>
+    <a href="#one-token" role="tab" id="tab-one-token">One token</a>
+    <a href="#limits" role="tab" id="tab-limits">The map and the limit</a>
+  </nav>
+
+  <!-- Tabs 1 and 2 share the code pane and the machine -->
+  <section class="view" id="view-walk">
+    <h1 id="walk-h1"></h1>
+    <p class="hint" id="walk-hint"></p>
+
+    <section class="step" aria-live="polite">
+      <div class="step-head">
+        <p class="step-title" id="title"></p>
+        <div class="controls">
+          <button id="back" type="button">Back</button>
+          <button id="next" type="button" class="primary">Next</button>
+        </div>
+      </div>
+      <p class="step-text" id="text"></p>
+      <div class="progress" id="progress"></div>
+    </section>
+
+    <div class="code" id="code">
+      <div class="code-head"><b>qwen3.c</b><span id="code-where"></span></div>
+      <div class="code-body" id="code-body"></div>
+    </div>
+
+    <div class="pkg">
+      <p class="label">M5 Pro package</p>
+      <div class="dies">
+        <div class="die" id="die-cpu">
+          <p class="label">CPU</p>
+          <button class="unit" data-id="super"><b>Super cores</b>
+            <span class="threads" id="threads"><i>main</i><i>w1</i><i>w2</i><i>w3</i><i>w4</i><i>w5</i></span>
+            <span class="key"><span class="k-run">running</span><span class="k-spin">spinning, waiting for work</span><span>asleep</span></span>
+            <small>The engine's six threads. macOS decides which core runs each one.</small></button>
+          <div class="pair">
+            <button class="unit" data-id="l1"><b>L1 cache</b><small>128 KB in each core</small></button>
+            <button class="unit" data-id="l2"><b>L2 cache</b><small>16 MB, shared by the six</small></button>
+          </div>
+          <button class="unit idle" data-id="perf"><b>Performance cores</b><span class="pips" id="pips-p"></span><small>12 cores the engine never asks for</small></button>
+        </div>
+        <div class="die" id="die-gpu">
+          <p class="label">Everything else on the chip</p>
+          <button class="unit idle" data-id="gpu"><b>20 GPU cores</b><small>Idle: no Metal code</small></button>
+          <button class="unit idle" data-id="npu"><b>Neural Engine</b><small>Idle</small></button>
+          <button class="unit" data-id="memif"><b>Memory interface</b><small>The one path to RAM</small></button>
+        </div>
+      </div>
+      <div class="link" id="l-mem">↕ up to 307 GB/s</div>
+      <button class="unit" data-id="mem"><b>Unified memory, 48 GB, drawn to scale</b>
+        <span class="membar" id="membar">
+          <span class="seg" data-s="emb" style="width:4.83%"></span>
+          <span class="seg layers" data-s="layers" id="seg-layers" style="width:53.9%"></span>
+          <span class="seg" data-s="head" style="width:4.83%"></span>
+          <span class="seg" data-s="kv" style="width:1.4%"></span>
+          <span class="seg" data-s="file" style="width:31.8%"></span>
+        </span>
+        <span class="memlabels" id="memlabels">
+          <span data-s="emb" style="width:4.83%">emb</span>
+          <span data-s="layers" style="width:53.9%">36 layers of weights, 25.9 GB</span>
+          <span data-s="head" style="width:4.83%">out</span>
+          <span data-s="kv" style="width:1.4%"></span>
+          <span data-s="file" style="width:31.8%">copy of the files, 15.3 GB</span>
+        </span>
+        <small class="memnote" id="memnote"></small></button>
+      <div class="link" id="l-ssd">↑ 16 KB pages, read the first time they are touched</div>
+      <button class="unit" data-id="ssd"><b>SSD</b><small>Five weight files, 15.3 GB, every number stored in 16 bits</small></button>
+    </div>
+    <p class="sub" style="margin-top:14px">Sizes use 1 GB = 2<sup>30</sup> bytes, the same unit as the 48 GB of memory and the benchmark's 30.58 GB. Cache sizes and core counts were read from this Mac (Mac17,8) with <span class="mono">sysctl</span>. The 307 GB/s is Apple's published maximum. Line numbers are from <span class="mono">qwen3.c</span> at commit f3947aa.</p>
+  </section>
+
+  <!-- Tab 3 -->
+  <section class="view" id="view-limits" hidden>
+    <h1>The map and the limit</h1>
+    <p class="hint">Which C function uses which part of the machine, and why 7.3 tokens per second is already close to what this design can do.</p>
+
+    <div class="card">
+      <h2>What each piece of C does in the hardware</h2>
+      <div class="scroll">
+        <table class="cmp">
+          <thead><tr><th>C code</th><th>Runs on</th><th>Touches</th><th class="r">Per token</th></tr></thead>
+          <tbody>
+            <tr><th>dot()</th><td>All six threads, as NEON multiply-adds</td><td>A row of weights from RAM, the input vector from L1</td><td class="r">28.2 GB read</td></tr>
+            <tr><th>matvec()</th><td>Main thread, then all six</td><td>Cuts a matrix's rows into chunks for the pool</td><td class="r">253 calls</td></tr>
+            <tr><th>pool_run()</th><td>Main thread wakes five workers</td><td>One atomic counter shared between cores</td><td class="r">253 hand-offs</td></tr>
+            <tr><th>attn_job()</th><td>Main thread; all six after position 256</td><td>The KV cache: 8 KB per layer per earlier token</td><td class="r">grows with position</td></tr>
+            <tr><th>rmsnorm(), rope()</th><td>Main thread only</td><td>Vectors of 16 KB or less, all in L1</td><td class="r">under 1 MB</td></tr>
+            <tr><th>forward()</th><td>Main thread</td><td>Writes this token's key and value into the KV cache</td><td class="r">288 KB written</td></tr>
+            <tr><th>sample()</th><td>Main thread only</td><td>151,936 scores, 0.6 MB, sitting in L2</td><td class="r">1 pass</td></tr>
+            <tr><th>load_tensor()</th><td>Main thread only, at startup</td><td>SSD pages in, a private 32-bit copy out</td><td class="r">once: 24.6 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">The first row is where the time goes. Everything below it works on data small enough to stay in a cache.</p>
+    </div>
+
+    <div class="card">
+      <h2>Bytes pulled from RAM for one generated token</h2>
+      <div class="split" role="img" aria-label="Of 28.2 GB read per token, 20.3 GB is the MLP matrices, 5.6 GB the attention matrices and 2.3 GB the output layer">
+        <span class="a" style="width:71.8%">MLP 20.3 GB</span><span class="b" style="width:20%">attention 5.6 GB</span><span class="c" style="width:8.2%">2.3</span>
+      </div>
+      <div class="legend"><span class="a">gate, up, down: 3 × 192 MB × 36 layers</span><span class="b">q, k, v, o: 160 MB × 36 layers</span><span class="c">output layer, 2.3 GB</span></div>
+      <p class="sub">No matrix fits in a cache. The largest are 192 MB and the L2 is 16 MB, so every weight is fetched from RAM again for every token.</p>
+    </div>
+
+    <div class="card">
+      <h2>How close to the memory limit the engine already runs</h2>
+      <pre class="sum">28.2 GB per token × 7.3 tokens/s = 206 GB/s
+the memory interface's maximum     = 286 GB/s   (Apple's 307, in these units)
+                                     72% of the maximum</pre>
+      <p class="sub">This is arithmetic from the benchmark, not a measurement of this Mac's real memory speed. If it holds, six cores doing float32 math are not the bottleneck. The path to RAM is.</p>
+    </div>
+
+    <div class="card">
+      <h2>Tokens per second if every byte arrived at the maximum rate</h2>
+      <div class="bars">
+        <span>Measured today, 32-bit weights</span><span class="track"><span class="fill hot" style="width:9%"></span></span><span class="v">7.3</span>
+        <span>32-bit weights, at the limit</span><span class="track"><span class="fill" style="width:12.5%"></span></span><span class="v">10.1</span>
+        <span>16-bit weights, as stored on disk</span><span class="track"><span class="fill" style="width:25%"></span></span><span class="v">20.3</span>
+        <span>8-bit weights</span><span class="track"><span class="fill" style="width:50%"></span></span><span class="v">40.6</span>
+        <span>4-bit weights</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="v">81.1</span>
+      </div>
+      <p class="sub">Only the first bar is measured. The rest divide 286 GB/s by the bytes one token would read. Real numbers will be lower, because narrower weights need more arithmetic per byte and the limit then moves back toward the cores.</p>
+    </div>
+
+    <div class="card">
+      <h2>What the engine leaves idle</h2>
+      <div class="scroll">
+        <table class="cmp">
+          <thead><tr><th>Part</th><th>Why it is idle</th></tr></thead>
+          <tbody>
+            <tr><th style="font-family:var(--sans)">12 Performance cores</th><td><span class="mono">default_thread_count()</span> asks macOS for the number of fastest cores and gets 6. <span class="mono">--threads 18</span> would use them all.</td></tr>
+            <tr><th style="font-family:var(--sans)">20 GPU cores</th><td>The engine is plain C on the CPU. It has no Metal code.</td></tr>
+            <tr><th style="font-family:var(--sans)">Neural Engine</th><td>Only reachable through Core ML.</td></tr>
+            <tr><th style="font-family:var(--sans)">Five workers during loading</th><td>The 16-bit to 32-bit conversion is one loop on the main thread.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">More cores only help while memory is not the limit. The thread sweep (<span class="mono">./bench.sh --sweep</span>) will show where that point is.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ---------- code excerpts: [line number or null for a gap, text, highlighted] ---------- */
+const CODE = {
+  main: ["main(), lines 2268 to 2276", [
+    [2268, "    config_load(&model.cfg, o.model_dir);", 1],
+    [null, "    ...", 0],
+    [2275, "    pool_init(o.threads > 0 ? o.threads : default_thread_count());", 0],
+    [2276, "    model_load(&model, o.model_dir, o.ctx);", 0]]],
+  pool_init: ["pool_init(), line 1404", [
+    [1398, "    if (sysctlbyname(\"hw.perflevel0.physicalcpu\", &n, &len, NULL, 0) == 0", 0],
+    [null, "            && n > 0) return n;        /* 6 on this Mac */", 0],
+    [null, "    ...", 0],
+    [1412, "    for (int i = 0; i < n_threads - 1; i++)", 1],
+    [1413, "        if (pthread_create(&pool.threads[i], NULL, pool_worker, NULL) != 0)", 1],
+    [null, "            die(\"cannot create thread\\n\");", 0]]],
+  mmap: ["st_open(), line 1126", [
+    [1129, "    int fd = open(path, O_RDONLY);", 0],
+    [null, "    ...", 0],
+    [1135, "    f->map = mmap(NULL, f->map_len, PROT_READ, MAP_PRIVATE, fd, 0);", 1],
+    [1136, "    if (f->map == MAP_FAILED) die(\"cannot mmap %s: %s\\n\", path, strerror(errno));", 0],
+    [1137, "    close(fd);", 0]]],
+  widen: ["load_tensor(), line 1234", [
+    [1258, "    const unsigned char *src = f->data + beg;   /* inside the mapped file */", 0],
+    [1259, "    float *out = alloc_floats(count);           /* new private memory */", 0],
+    [null, "    ...", 0],
+    [1265, "        for (size_t i = 0; i < count; i++) {", 1],
+    [1266, "            uint16_t h;", 1],
+    [1267, "            memcpy(&h, src + 2 * i, 2);         /* 2 bytes in */", 1],
+    [1268, "            uint32_t u = (uint32_t)h << 16;", 1],
+    [1269, "            memcpy(&out[i], &u, 4);             /* 4 bytes out */", 1],
+    [1270, "        }", 1]]],
+  close: ["model_load(), line 1590", [
+    [1626, "    else m->lm_head = load_tensor(&w, \"lm_head.weight\", c->vocab_size, D);", 0],
+    [1627, "    weights_close(&w);        /* munmap: the file addresses go away */", 1]]],
+  kv: ["model_load(), line 1643", [
+    [1643, "    /* KV cache. calloc hands back untouched zero pages, so only the positions", 0],
+    [1644, "     * actually used ever take real memory. */", 0],
+    [null, "    ...", 0],
+    [1647, "    for (int l = 0; l < c->n_layers; l++) {", 0],
+    [1648, "        m->k_cache[l] = xcalloc((size_t)ctx * KD, sizeof(float));", 1],
+    [1649, "        m->v_cache[l] = xcalloc((size_t)ctx * KD, sizeof(float));", 1],
+    [1650, "    }", 0]]],
+  embed: ["forward(), line 1728", [
+    [1733, "    float *x = m->x;", 0],
+    [null, "", 0],
+    [1735, "    memcpy(x, m->tok_emb + (size_t)token * D, (size_t)D * sizeof(float));", 1]]],
+  norm: ["rmsnorm(), line 1665", [
+    [1665, "static void rmsnorm(float *out, const float *x, const float *gain, int n, float eps) {", 0],
+    [1666, "    float inv = 1.0f / sqrtf(dot(x, x, n) / (float)n + eps);", 1],
+    [1667, "    for (int i = 0; i < n; i++) out[i] = x[i] * inv * gain[i];", 1],
+    [1668, "}", 0],
+    [null, "    ...", 0],
+    [1741, "        rmsnorm(m->xn, x, L->attn_norm, D, c->rms_eps);", 0]]],
+  matvec: ["matvec() and pool_run(), lines 1363 to 1482", [
+    [1473, "    for (int r = r0; r < r1; r++)       /* one chunk of rows */", 0],
+    [null, "        j->y[r] = dot(j->W + (size_t)r * (size_t)j->cols, j->x, j->cols);", 0],
+    [null, "    ...", 0],
+    [1478, "    int chunk = rows / (pool.n_threads * 4);", 1],
+    [1481, "    pool_run(matvec_job, &j, rows, chunk);", 1],
+    [null, "    ...", 0],
+    [1375, "    atomic_fetch_add(&pool.gen, 1);     /* releases the workers */", 1],
+    [1379, "    pool_drain();                       /* the calling thread works too */", 0]]],
+  dot: ["dot(), line 1441", [
+    [1433, "typedef float v8f __attribute__((vector_size(32)));   /* 8 floats */", 0],
+    [null, "    ...", 0],
+    [1442, "    v8f s0 = {0}, s1 = {0}, s2 = {0}, s3 = {0};", 0],
+    [1444, "    for (; i + 32 <= n; i += 32) {", 1],
+    [1445, "        s0 += v8_load(a + i) * v8_load(b + i);", 1],
+    [1446, "        s1 += v8_load(a + i + 8) * v8_load(b + i + 8);", 1],
+    [1447, "        s2 += v8_load(a + i + 16) * v8_load(b + i + 16);", 1],
+    [1448, "        s3 += v8_load(a + i + 24) * v8_load(b + i + 24);", 1],
+    [1449, "    }", 1]]],
+  attn: ["forward() and attn_job(), lines 1689 to 1757", [
+    [1742, "        float *k = m->k_cache[l] + (size_t)pos * KD;   /* written straight */", 0],
+    [1743, "        float *v = m->v_cache[l] + (size_t)pos * KD;   /* into the cache */", 0],
+    [1745, "        matvec(k, L->wk, m->xn, KD, D);", 0],
+    [1746, "        matvec(v, L->wv, m->xn, KD, D);", 0],
+    [null, "    ...", 0],
+    [1703, "        for (int t = 0; t < T; t++) {          /* every earlier position */", 1],
+    [1704, "            att[t] = dot(q, K + (size_t)t * KD, hd) * scale;", 1],
+    [null, "    ...", 0],
+    [1756, "        if (pos >= 256) pool_run(attn_job, &job, c->n_heads, 1);", 0]]],
+  mlp: ["forward(), line 1761", [
+    [1761, "        /* ---- MLP (SwiGLU): down( silu(gate(x)) * up(x) ) ---- */", 0],
+    [1762, "        rmsnorm(m->xn, x, L->mlp_norm, D, c->rms_eps);", 0],
+    [1763, "        matvec(m->hg, L->w_gate, m->xn, c->hidden, D);", 1],
+    [1764, "        matvec(m->hu, L->w_up, m->xn, c->hidden, D);", 1],
+    [1765, "        for (int i = 0; i < c->hidden; i++)", 0],
+    [null, "            m->hg[i] = m->hg[i] / (1.0f + expf(-m->hg[i])) * m->hu[i];", 0],
+    [1766, "        matvec(m->tmp, L->w_down, m->hg, D, c->hidden);", 1],
+    [1767, "        for (int i = 0; i < D; i++) x[i] += m->tmp[i];", 0]]],
+  layers: ["forward(), line 1737", [
+    [1737, "    for (int l = 0; l < c->n_layers; l++) {        /* 36 times */", 1],
+    [1738, "        const Layer *L = &m->layers[l];", 0],
+    [null, "        ...", 0],
+    [1768, "    }", 0],
+    [null, "", 0],
+    [1770, "    if (!want_logits) return NULL;", 0],
+    [1771, "    rmsnorm(m->xn, x, m->final_norm, D, c->rms_eps);", 0],
+    [1772, "    matvec(m->logits, m->lm_head, m->xn, c->vocab_size, D);", 1]]],
+  sample: ["sample() and generate(), lines 1813 to 1985", [
+    [1814, "    if (s->temperature <= 0.0f) { /* greedy: always the most likely token */", 0],
+    [1815, "        int best = 0;", 0],
+    [1816, "        for (int i = 1; i < n; i++)", 1],
+    [1817, "            if (logits[i] > logits[best]) best = i;", 1],
+    [1818, "        return best;", 0],
+    [null, "    ...", 0],
+    [1984, "        fwrite(bytes, 1, len, stdout);", 1],
+    [1986, "        fflush(stdout);", 0]]]
+};
+
+/* ---------- steps ----------
+   th: thread states for [main, w1..w5]: r running, s spinning, z asleep
+   mem: segment -> on | hot | flow | ghost ; layer: which layer slices are hot ("none" | "one" | "all") */
+const ALLR = "rrrrrr", MAIN = "rsssss", LOADT = "rzzzzz";
+const TABS = {
+  "loading": {
+    h1: "Loading the model: 24.6 seconds",
+    hint: "What happens between typing ./run_8b.sh and the first token. Step through it, or tap any part of the machine.",
+    steps: [
+      { t: "The program starts as one thread", code: "main", th: "r-----", hot: ["super"], dies: ["cpu"],
+        mem: {}, note: "Nothing of the model is in memory yet.",
+        x: "main() begins on a single core. It reads config.json to learn the model's shape: 36 layers, vectors 4,096 numbers wide, a vocabulary of 151,936 tokens. Nothing in the C file knows those sizes in advance." },
+      { t: "Five more threads are created, then go to sleep", code: "pool_init", th: "rsssss", hot: ["super", "perf"], dies: ["cpu"],
+        mem: {}, note: "Nothing of the model is in memory yet.",
+        x: "The engine asks macOS how many of the fastest cores exist and gets 6. It creates five worker threads, which with main makes six. The workers find no job, spin for a moment, then sleep. The engine never asks for the 12 Performance cores, and it does not pin threads: macOS chooses which core runs each one." },
+      { t: "mmap turns the files into addresses", code: "mmap", th: LOADT, hot: ["super", "ssd", "mem"], dies: ["cpu"],
+        mem: { file: "ghost" }, note: "15.3 GB of addresses now point at the files. No bytes have been read.",
+        x: "For each of the five weight files, mmap asks the kernel to make the file appear as a range of memory. It returns at once and reads nothing. The bytes are fetched from the SSD later, one 16 KB page at a time, the first time the code touches them." },
+      { t: "Every weight is widened from 16 bits to 32", code: "widen", th: LOADT, hot: ["super", "ssd", "mem", "memif"], dies: ["cpu"],
+        mem: { file: "flow", emb: "hot", layers: "hot", head: "hot" }, layer: "all", ssd: true, flow: true,
+        note: "Pages arrive from the SSD on the right. The 32-bit copy fills the left.",
+        x: "This loop is the 24.6 seconds. For each of the 399 tensors it allocates a new float array, then reads 2 bytes from the mapped file, shifts them left by 16, and stores 4 bytes. It runs 8.19 billion times on the main thread alone. The five workers sleep through it." },
+      { t: "Memory at the end of loading", code: "close", th: LOADT, hot: ["mem"], dies: [],
+        mem: { file: "ghost", emb: "on", layers: "on", head: "on" }, layer: "none",
+        note: "30.5 GB of weights the process owns, plus up to 15.3 GB of file pages macOS may still be holding.",
+        x: "The process now owns 30.5 GB of 32-bit weights. Reading the files also pulled up to 15.3 GB of them into memory. Together that is 45.8 of 48 GB. macOS can throw the file pages away, but the benchmark saw swap grow by 3.9 GB. This squeeze is the likely cause. That has not been confirmed." },
+      { t: "The KV cache is reserved but not yet real", code: "kv", th: "rsssss", hot: ["mem", "super"], dies: ["cpu"],
+        mem: { file: "ghost", emb: "on", layers: "on", head: "on", kv: "hot" }, layer: "none",
+        note: "The thin slice after the weights is the KV cache: 1.1 GB reserved, almost none of it touched.",
+        x: "The engine reserves room to remember 4,096 tokens: two arrays of 16 MB for each of the 36 layers, 1.1 GB in total. calloc returns pages that take no physical memory until something writes to them. Each token will later make 288 KB of it real. Loading is done." }
+    ]
+  },
+  "one-token": {
+    h1: "One token: 137 milliseconds",
+    hint: "At 7.3 tokens per second, each token takes 137 ms. This is one call to forward(), followed from the first line to the printed word.",
+    steps: [
+      { t: "Look up the token's row", code: "embed", th: MAIN, hot: ["super", "l1", "mem"], dies: ["cpu"],
+        mem: { emb: "hot", layers: "on", head: "on", kv: "on" }, layer: "none",
+        note: "One 16 KB row is read out of the 2.3 GB embedding table.",
+        x: "The token's id selects one row of the embedding table: 4,096 floats, 16 KB out of 2.3 GB. memcpy copies it into x. That vector is the token's running state for the whole pass, and at 16 KB it stays in the core's 128 KB L1 cache." },
+      { t: "Small math stays on one core", code: "norm", th: MAIN, hot: ["super", "l1"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "on" }, layer: "none",
+        note: "No weights are being read. The data is all in cache.",
+        x: "rmsnorm scales x before each block. This, the position rotation (rope), the adds back into x and the SiLU loop all run on the main thread only. Their data is 48 KB at most, so it never leaves the caches. The five workers spin while they wait, because the next job is microseconds away." },
+      { t: "matvec hands the rows to six threads", code: "matvec", th: ALLR, hot: ["super"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "on" }, layer: "one",
+        note: "One layer of the 36 is lit: 736 MB across seven matrices.",
+        x: "Each output number is one row of the matrix multiplied with x, and rows are independent. For the 12,288-row gate matrix, matvec cuts the rows into 24 chunks of 512. Raising pool.gen releases the spinning workers. Each thread then claims the next chunk with one atomic add until none are left." },
+      { t: "dot is the loop where the time goes", code: "dot", th: ALLR, hot: ["super", "l1", "l2", "memif", "mem"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "on" }, layer: "one", flow: true,
+        note: "Weights stream out of RAM through the memory interface to all six cores.",
+        x: "Each pass of this loop loads 32 weights and 32 inputs, multiplies them, and adds into four running sums. The compiler turned it into NEON fmla instructions, four floats each. The inputs come from L1 every time. The weights cannot: one matrix is 192 MB and the L2 is 16 MB, so every weight arrives from RAM, 128 bytes per pass." },
+      { t: "Attention reads the past", code: "attn", th: MAIN, hot: ["super", "mem", "l2"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "hot" }, layer: "one",
+        note: "The KV cache slice is lit. It grows by 288 KB per token.",
+        x: "Three matvecs produce this token's query, key and value. The key and value are written straight into the KV cache, 8 KB per layer. Then each of the 32 heads scores every earlier position with dot and averages their values. On a short conversation this reads under 1 MB, so it stays on the main thread until position 256." },
+      { t: "The MLP is three big matrices", code: "mlp", th: ALLR, hot: ["super", "memif", "mem"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "on" }, layer: "one", flow: true,
+        note: "576 MB of this layer's 736 MB is these three matrices.",
+        x: "gate and up each turn 4,096 numbers into 12,288. The SiLU loop between them runs on the main thread. down turns 12,288 back into 4,096, and the result is added into x. Each matrix is 192 MB. Across the model these three are 72% of all the bytes a token reads." },
+      { t: "36 layers, then the output layer", code: "layers", th: ALLR, hot: ["super", "memif", "mem"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "hot", kv: "on" }, layer: "all", flow: true,
+        note: "Everything lit is read once for this one token: 28.2 GB.",
+        x: "The loop repeats for all 36 layers: seven matvecs each, 252 hand-offs to the pool, 25.9 GB of weights. Then the output layer multiplies x by a 151,936-row matrix, one score for every token in the vocabulary, another 2.3 GB. Prompt tokens other than the last skip that final step." },
+      { t: "Pick a token and print it", code: "sample", th: MAIN, hot: ["super", "l2"], dies: ["cpu"],
+        mem: { emb: "on", layers: "on", head: "on", kv: "on" }, layer: "none",
+        note: "Nothing is kept except 288 KB of new KV cache. The next token reads all 28.2 GB again.",
+        x: "Back on the main thread, sample scans the 151,936 scores. With temperature 0 it takes the largest. The token's bytes are written to the terminal. Then forward runs again for the token just chosen, and all 28.2 GB come out of RAM again." }
+    ]
+  }
+};
+
+const INFO = {
+  super: ["Super cores", "Six of them, the fastest CPU cores on the chip. The engine starts six threads to match: main, which runs forward(), and five workers that only ever run chunks of a matvec or of attention. The code does not pin threads, so which core runs which thread is macOS's decision."],
+  l1: ["L1 cache", "128 KB of the fastest memory, private to each Super core. The token's vector x is 16 KB and one row of the widest matrix is 48 KB, so the vector side of every dot product is always here. The weight side never is."],
+  l2: ["L2 cache", "16 MB shared by the six Super cores. It holds the output scores (0.6 MB) and, on short conversations, the part of the KV cache being read. The smallest big matrix is 16 MB on its own, and a layer has 736 MB of them."],
+  perf: ["Performance cores", "Twelve smaller cores with a 64 KB L1 each and 8 MB of L2 per group of six. default_thread_count() counts only the fastest core type, so these stay idle unless you pass --threads."],
+  gpu: ["GPU cores", "Idle. qwen3.c is plain C compiled for the CPU. Using these would mean writing the matrix multiply as a Metal kernel. They would read the same 30.5 GB in place, because the memory is shared."],
+  npu: ["Neural Engine", "Idle. It is only reachable through Core ML, which this engine does not use."],
+  memif: ["Memory interface", "Every weight a core reads comes through here. Its maximum of 307 GB/s is shared by everything on the chip. At 7.3 tokens per second the engine is already pulling about 72% of that, by arithmetic."],
+  mem: ["Unified memory", "48 GB in one pool. The bar is to scale: the embedding table (2.3 GB), 36 layers of weights (25.9 GB), the output layer (2.3 GB), the KV cache, and the copy of the weight files that loading drags in (15.3 GB). What is left over is all macOS and your other apps get."],
+  ssd: ["SSD", "Holds the five safetensors files. Each weight is stored as bfloat16: the top 16 bits of a 32-bit float. The SSD is only touched while loading. After that the engine never reads a file again."]
+};
+
+/* ---------- build static bits ---------- */
+for (let i = 0; i < 12; i++) $("pips-p").appendChild(document.createElement("i"));
+for (let i = 0; i < 36; i++) $("seg-layers").appendChild(document.createElement("i"));
+
+/* ---------- render ---------- */
+let tab = "loading", mode = "walk", step = 0, inspected = null;
+const units = document.querySelectorAll("#view-walk .unit");
+
+function showCode(key) {
+  const [where, lines] = CODE[key];
+  $("code-where").textContent = where;
+  const body = $("code-body");
+  body.textContent = "";
+  for (const [n, text, hl] of lines) {
+    const row = document.createElement("div");
+    if (hl) row.className = "hl";
+    const num = document.createElement("span");
+    num.className = "n"; num.textContent = n === null ? "" : n;
+    const src = document.createElement("span");
+    src.textContent = text || " ";
+    if (n === null && text.trim() === "...") src.className = "gap";
+    row.append(num, src);
+    body.appendChild(row);
+  }
+  body.scrollLeft = 0;
+}
+function showMachine(s) {
+  [...$("threads").children].forEach((el, i) => {
+    const c = s.th[i];
+    el.className = c === "r" ? "run" : c === "s" ? "spin" : "";
+    el.style.visibility = c === "-" ? "hidden" : "visible";
+  });
+  document.querySelectorAll("#membar .seg").forEach(seg => {
+    const st = s.mem[seg.dataset.s] || "";
+    const isLayers = seg.dataset.s === "layers";
+    seg.className = "seg" + (isLayers ? " layers" : "") + (st && !(isLayers && st === "hot") ? " " + st : "") + (isLayers && st === "hot" ? " on" : "");
+  });
+  [...$("seg-layers").children].forEach((el, i) => {
+    el.className = s.layer === "all" || (s.layer === "one" && i === 11) ? "hot" : "";
+  });
+  document.querySelectorAll("#memlabels span").forEach(l => {
+    const st = s.mem[l.dataset.s];
+    l.classList.toggle("lit", st === "hot" || st === "flow" || (l.dataset.s === "layers" && !!s.layer && s.layer !== "none"));
+  });
+  $("memnote").textContent = s.note;
+  $("l-mem").classList.toggle("flow", !!s.flow);
+  $("l-ssd").classList.toggle("flow", !!s.ssd);
+  $("die-cpu").classList.toggle("followed", s.dies.includes("cpu"));
+}
+function render() {
+  const T = TABS[tab], all = T.steps;
+  $("walk-h1").textContent = T.h1;
+  $("walk-hint").textContent = T.hint;
+  units.forEach(u => u.classList.remove("hot"));
+  const prog = $("progress");
+  if (prog.children.length !== all.length) {
+    prog.textContent = "";
+    all.forEach(() => prog.appendChild(document.createElement("span")));
+  }
+  if (mode === "walk") {
+    const s = all[step];
+    $("title").textContent = `Step ${step + 1} of ${all.length}: ${s.t}`;
+    $("text").textContent = s.x;
+    showCode(s.code);
+    showMachine(s);
+    units.forEach(u => { if (s.hot.includes(u.dataset.id)) u.classList.add("hot"); });
+    [...prog.children].forEach((p, i) => p.classList.toggle("on", i <= step));
+    prog.style.visibility = "visible";
+    $("back").disabled = step === 0;
+    $("next").textContent = step === all.length - 1 ? "Restart" : "Next";
+  } else {
+    const [t, x] = INFO[inspected];
+    $("title").textContent = t;
+    $("text").textContent = x;
+    units.forEach(u => { if (u.dataset.id === inspected) u.classList.add("hot"); });
+    prog.style.visibility = "hidden";
+    $("back").disabled = true;
+    $("next").textContent = "Back to the steps";
+  }
+}
+$("next").addEventListener("click", () => {
+  if (mode === "inspect") mode = "walk";
+  else step = step === TABS[tab].steps.length - 1 ? 0 : step + 1;
+  render();
+});
+$("back").addEventListener("click", () => { if (mode === "walk" && step > 0) { step--; render(); } });
+units.forEach(u => u.addEventListener("click", () => { mode = "inspect"; inspected = u.dataset.id; render(); }));
+document.addEventListener("keydown", e => {
+  if ($("view-walk").hidden) return;
+  if (e.key === "ArrowRight") $("next").click();
+  if (e.key === "ArrowLeft") $("back").click();
+});
+
+/* ---------- tab routing ---------- */
+function route() {
+  const h = location.hash.slice(1);
+  const key = (TABS[h] || h === "limits") ? h : "loading";
+  ["loading", "one-token", "limits"].forEach(k => $("tab-" + k).setAttribute("aria-selected", k === key));
+  $("view-limits").hidden = key !== "limits";
+  $("view-walk").hidden = key === "limits";
+  if (key !== "limits" && key !== tab) { tab = key; step = 0; mode = "walk"; }
+  if (key !== "limits") render();
+}
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>
