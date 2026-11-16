@@ -2,6 +2,8 @@
 layout: post
 title: "Baseline: 7.3 tokens per second"
 commit: f3947aa
+tok_s: 7.3
+walkthrough: /walkthroughs/baseline/
 summary: "The unoptimized engine on Qwen3-8B: 7.3 tokens/s, 30.6 GB of memory, and two numbers that look wrong."
 ---
 

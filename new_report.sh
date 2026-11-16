@@ -6,7 +6,9 @@
 #
 # Writes docs/_posts/DATE-title.md with a before/after table filled in from
 # the last two rows for that model in docs/_data/results.csv. Then write the
-# prose, commit, and push: GitHub Pages publishes it.
+# prose, commit, and push: GitHub Pages publishes it. The report becomes one
+# block on the home page; its page shows the numbers and, if the front matter
+# names one, the walkthrough for that iteration.
 set -e
 cd "$(dirname "$0")"
 
@@ -40,7 +42,7 @@ awk -F, -v model="$(basename "$MODEL")" -v title="$TITLE" '
     NR > 1 && $3 == model { n++; for (i = 1; i <= NF; i++) { prev[i] = cur[i]; cur[i] = $i } }
     END {
         if (!n) { print "error: no rows for " model " in the results" > "/dev/stderr"; exit 1 }
-        printf "---\nlayout: post\ntitle: \"%s\"\ncommit: %s\nsummary: \"\"\n---\n\n", title, cur[2]
+        printf "---\nlayout: post\ntitle: \"%s\"\ncommit: %s\ntok_s: %s\nsummary: \"\"\n# walkthrough: /walkthroughs/NAME/   (a page in docs/walkthroughs/NAME/index.html)\n---\n\n", title, cur[2], cur[10]
         print "## What changed\n\nTODO\n\n## Numbers\n"
         if (n > 1) print "| | Before | After | Change |\n|---|---|---|---|"
         else print "| | Measured |\n|---|---|"

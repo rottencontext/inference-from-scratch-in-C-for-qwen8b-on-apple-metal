@@ -168,7 +168,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--flow); outline-
 </head>
 <body>
 <main>
-  <p class="hint" style="margin:0 0 10px"><a href="../" style="color:var(--hot)">← Back to the progress blog</a></p>
+  <p class="hint" id="backlink" style="margin:0 0 10px"><a href="../../reports/2026-11-16-baseline-7-3-tokens-per-second/" style="color:var(--hot)">← Back to this iteration</a></p>
   <nav class="tabs" role="tablist">
     <a href="#loading" role="tab" id="tab-loading">Loading the model</a>
     <a href="#one-token" role="tab" id="tab-one-token">One token</a>
@@ -316,6 +316,7 @@ the memory interface's maximum     = 286 GB/s   (Apple's 307, in these units)
 
 <script>
 const $ = id => document.getElementById(id);
+if (window.self !== window.top) $("backlink").hidden = true;   /* embedded in the iteration page */
 
 /* ---------- code excerpts: [line number or null for a gap, text, highlighted] ---------- */
 const CODE = {

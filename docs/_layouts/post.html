@@ -2,10 +2,57 @@
 layout: default
 ---
 <article>
-  <p class="meta">{{ page.date | date: "%-d %B %Y" }}{% if page.commit %} · commit <code>{{ page.commit }}</code>{% endif %}</p>
+  <p class="meta"><a href="{{ '/' | relative_url }}">All iterations</a> · {{ page.date | date: "%-d %B %Y" }}{% if page.commit %} · commit <code>{{ page.commit }}</code>{% endif %}</p>
   <h1>{{ page.title }}</h1>
   {% if page.summary %}<p class="lede">{{ page.summary }}</p>{% endif %}
+  {% if page.walkthrough %}<p class="jump"><a href="#numbers">Numbers</a><a href="#walkthrough">Walkthrough</a></p>{% endif %}
+  <div id="numbers">
   {{ content }}
+  </div>
+
+  {% assign rows = site.data.results | where: "commit", page.commit | where: "model", "model-8b" %}
+  {% if rows.size > 0 %}
+  <h2>Benchmark runs for this iteration</h2>
+  <div class="scroll">
+  <table class="runs">
+    <thead><tr>
+      <th>Date</th><th>Note</th><th class="n">Generate tok/s</th><th class="n">Prompt tok/s</th>
+      <th class="n">Load s</th><th class="n">Peak GB</th><th class="n">Swap MB</th><th class="n">Logits diff</th><th>Same reply</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.date }}</td><td>{{ r.note }}</td>
+      <td class="n strong">{{ r.gen_tok_s }}</td><td class="n">{{ r.prompt_tok_s }}</td><td class="n">{{ r.load_s }}</td>
+      <td class="n">{{ r.peak_mem_gb }}</td><td class="n">{{ r.swap_mb }}</td><td class="n">{{ r.logits_diff }}</td><td>{{ r.same_text }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Each row is the median of {{ rows.first.runs }} runs of {{ rows.first.new_tokens }} tokens on {{ rows.first.threads }} threads.
+  "Logits diff" and "same reply" compare the output with the original engine's.
+  Raw data for every iteration: <a href="{{ '/results.csv' | relative_url }}">results.csv</a>.</p>
+  {% endif %}
+
+  {% if page.walkthrough %}
+  <h2 id="walkthrough">Walkthrough: what this version does in the hardware</h2>
+  <p class="note">Step through loading the model and generating one token.
+  <a href="{{ page.walkthrough | relative_url }}">Open it on its own page</a>.</p>
+  <iframe class="walk" id="walk" src="{{ page.walkthrough | relative_url }}" title="Walkthrough of the code and the hardware" loading="lazy"></iframe>
+  <script>
+  (function () {
+    var f = document.getElementById("walk");
+    function fit() {
+      try { f.style.height = f.contentDocument.documentElement.scrollHeight + "px"; } catch (e) {}
+    }
+    f.addEventListener("load", function () {
+      fit();
+      try { new ResizeObserver(fit).observe(f.contentDocument.body); } catch (e) {}
+    });
+  })();
+  </script>
+  {% endif %}
 </article>
 <nav class="pager">
   {% if page.previous %}<a href="{{ page.previous.url | relative_url }}">← {{ page.previous.title }}</a>{% else %}<span></span>{% endif %}
